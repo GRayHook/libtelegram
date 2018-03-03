@@ -1,5 +1,5 @@
 main: libtgcommon.a
-	gcc -g telega.c -L. -ltgcommon -lcurl -ljson-c -lpthread -o run
+	gcc -g telega.c -Wall -L. -ltgcommon -lcurl -ljson-c -lpthread -o run
 
 libtgcommon.a: tgcommon.o
 	ar cr libtgcommon.a tgcommon.o

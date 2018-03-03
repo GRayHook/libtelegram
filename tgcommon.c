@@ -60,20 +60,12 @@ void *tg_circle_handler(void *arg) {
 				free(cur_msg);
 			}
 			tg_drop_messages(update_id);
-
-			// printf("FROM QUEUE %s\n", tasks_queue[0].text);
-			// printf("FROM QUEUE %s\n", tasks_queue[1].text);
-			// tg_message_t *taskiwe;
-			// tg_queue_pop(&taskiwe);
-			// printf("FROM POP %s\n", taskiwe->text);
-
 			sleep(TG_INTERVAL);
 	}
 }
 
 int tg_queue_pop(tg_message_t **task)
 {
-	printf("%s\n", __func__);
 	if (tasks_queue_i == 0) return ERR_QUEUE_POP;
 	if (pthread_mutex_lock(&tg_content_mutex) == 0){
 		*task = (tg_message_t *)malloc(sizeof(tg_message_t));
@@ -100,17 +92,18 @@ int tg_queue_pop(tg_message_t **task)
 
 int tg_queue_put(tg_message_t *task)
 {
-	printf("%s\n", __func__);
 	if (pthread_mutex_lock(&tg_content_mutex) == 0)
 	{
-		printf("%s before realloc\n", __func__);
-		tasks_queue = (tg_message_t *)realloc(tasks_queue,
-		                                    ++tasks_queue_i * sizeof(tg_message_t));
-		printf("%s after realloc\n", __func__);
-		tasks_queue[tasks_queue_i - 1] = *task;
-		printf("%s after =\n", __func__);
+		tg_message_t *tasks_queue_tmp;
+		tasks_queue_tmp = (tg_message_t *)malloc(
+			++tasks_queue_i * sizeof(tg_message_t)
+		);
+		memcpy(tasks_queue_tmp, tasks_queue,
+		       (tasks_queue_i - 1) * sizeof(tg_message_t));
+		if (tasks_queue_i > 1) free(tasks_queue);
+		tasks_queue = tasks_queue_tmp;
+		memcpy(&tasks_queue[tasks_queue_i - 1], task, sizeof(tg_message_t));
 		pthread_mutex_unlock(&tg_content_mutex);
-		printf("%s end\n", __func__);
 		return (tasks_queue[tasks_queue_i - 1].message_id == task->message_id)
 		       ? 0 : ERR_QUEUE_PUT;
 	}
