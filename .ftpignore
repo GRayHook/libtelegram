@@ -1,0 +1,6 @@
+*.o
+*.a
+*.gch
+run
+.git
+.gitignore

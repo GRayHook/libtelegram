@@ -11,10 +11,52 @@ int tg_start(json_object **content_json) {
 	return SUCCESS;
 }
 
+int tg_send_message(tg_message_t *msg)
+{
+	if (msg->chat_id <= 0) return -1;
+	CURL *curl;
+	char content_str[BUFF_SIZE];
+
+	char TG_link[LINK_SIZE];
+	char TG_link_sendmsg[LINK_SIZE];
+
+	curl_global_init(CURL_GLOBAL_DEFAULT);
+
+	curl = curl_easy_init();
+	if(curl)
+	{
+		sprintf(TG_link, "%s%s/", TG_BASIC_LINK, TG_TOKEN);
+		sprintf(TG_link_sendmsg, "%s%s", TG_link, TG_METHOD_SND);
+		sprintf(TG_link_sendmsg, "%s%s%s%d%s%s%s", TG_link_sendmsg,
+		        "?", TG_METHOD_SND_CHAT_ID, msg->chat_id,
+		        "&", TG_METHOD_SND_TEXT, curl_easy_escape(curl, msg->text, 0));
+
+		curl_easy_setopt(curl, CURLOPT_URL, TG_link_sendmsg);
+		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, tg_curl_write);
+		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &content_str);
+	}
+
+	CURLcode res;
+
+	res = curl_easy_perform(curl);
+	if(res != CURLE_OK)
+	{
+		fprintf(stderr, "curl_easy_perform() failed: %s\n",
+		curl_easy_strerror(res));
+	}
+
+	curl_easy_cleanup(curl);
+	curl_global_cleanup();
+
+	return 0;
+}
+
 void *tg_circle_handler(void *arg) {
 	json_object **content_json = (json_object **)arg;
 	tg_queue_init();
 	while (1) {
+		if (pthread_mutex_lock(&tg_content_mutex) == 0)
+		{
 			tg_get_content(content_json);
 
 			json_object *result_json;
@@ -38,8 +80,7 @@ void *tg_circle_handler(void *arg) {
 				                          "message_id",
 				                          &message_id_json);
 
-				tg_message_t *cur_msg;
-				cur_msg = (tg_message_t *)malloc(sizeof(tg_message_t));
+				tg_message_t *cur_msg = tg_message_init();
 
 				cur_msg->message_id = json_object_get_int(message_id_json);
 				printf("message id is %d\n", cur_msg->message_id);
@@ -57,57 +98,41 @@ void *tg_circle_handler(void *arg) {
 				printf("text is %s\n", cur_msg->text);
 
 				tg_queue_put(cur_msg);
-				free(cur_msg);
 			}
 			tg_drop_messages(update_id);
+
+			pthread_mutex_unlock(&tg_content_mutex);
 			sleep(TG_INTERVAL);
+		}
 	}
 }
 
 int tg_queue_pop(tg_message_t **task)
 {
-	if (tasks_queue_i == 0) return ERR_QUEUE_POP;
-	if (pthread_mutex_lock(&tg_content_mutex) == 0){
-		*task = (tg_message_t *)malloc(sizeof(tg_message_t));
-		memset(*task, 0, sizeof(tg_message_t));
-		**task = tasks_queue[0];
-		if (tasks_queue_i-- == 1) {
-			free(tasks_queue);
-			pthread_mutex_unlock(&tg_content_mutex);
-			return 0;
-		}
-		tg_message_t *tasks_queue_tmp;
-		tasks_queue_tmp = (tg_message_t *)
-		                  malloc(tasks_queue_i * sizeof(tg_message_t));
-		for (int i = 0; i < tasks_queue_i; i++) {
-			tasks_queue_tmp[i] = tasks_queue[i + 1];
-		}
+	if (tasks_queue_i == 0) return 1;
+	*task = (tg_message_t *)malloc(sizeof(tg_message_t));
+	**task = tasks_queue[0];
+	if (tasks_queue_i-- == 1) {
 		free(tasks_queue);
-		tasks_queue = tasks_queue_tmp;
-		pthread_mutex_unlock(&tg_content_mutex);
 		return 0;
 	}
-	return ERR_QUEUE_POP;
+	tg_message_t *tasks_queue_tmp;
+	tasks_queue_tmp = (tg_message_t *)
+	                  malloc(tasks_queue_i * sizeof(tg_message_t));
+	for (int i = 0; i < tasks_queue_i; i++) {
+		tasks_queue_tmp[i] = tasks_queue[i + 1];
+	}
+	free(tasks_queue);
+	tasks_queue = tasks_queue_tmp;
+	return 0;
 }
 
 int tg_queue_put(tg_message_t *task)
 {
-	if (pthread_mutex_lock(&tg_content_mutex) == 0)
-	{
-		tg_message_t *tasks_queue_tmp;
-		tasks_queue_tmp = (tg_message_t *)malloc(
-			++tasks_queue_i * sizeof(tg_message_t)
-		);
-		memcpy(tasks_queue_tmp, tasks_queue,
-		       (tasks_queue_i - 1) * sizeof(tg_message_t));
-		if (tasks_queue_i > 1) free(tasks_queue);
-		tasks_queue = tasks_queue_tmp;
-		memcpy(&tasks_queue[tasks_queue_i - 1], task, sizeof(tg_message_t));
-		pthread_mutex_unlock(&tg_content_mutex);
-		return (tasks_queue[tasks_queue_i - 1].message_id == task->message_id)
-		       ? 0 : ERR_QUEUE_PUT;
-	}
-	return ERR_QUEUE_PUT;
+	tasks_queue = (tg_message_t *)realloc(tasks_queue,
+		                                    ++tasks_queue_i * sizeof(tg_message_t));
+	tasks_queue[tasks_queue_i - 1] = *task;
+	return tasks_queue[tasks_queue_i - 1].message_id ? 0 : 1;
 }
 
 int tg_queue_init()
@@ -116,9 +141,13 @@ int tg_queue_init()
 	return 0;
 }
 
-/*
- *  Get updates from telegram by https
- */
+tg_message_t *tg_message_init()
+{
+	tg_message_t *msg = (tg_message_t *)malloc(sizeof(tg_message_t));
+	memset(msg, 0, sizeof(tg_message_t));
+	return msg;
+}
+
 int tg_get_content(json_object **content_json)
 {
 	CURL *curl;
