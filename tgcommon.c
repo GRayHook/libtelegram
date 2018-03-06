@@ -55,84 +55,104 @@ void *tg_circle_handler(void *arg) {
 	json_object **content_json = (json_object **)arg;
 	tg_queue_init();
 	while (1) {
-		if (pthread_mutex_lock(&tg_content_mutex) == 0)
-		{
-			tg_get_content(content_json);
+		tg_get_content(content_json);
 
-			json_object *result_json;
-			json_object_object_get_ex(*content_json, "result", &result_json);
-			int messages_len = json_object_array_length(result_json);
-			// TODO: Make arr sorted
-			int update_id = 0;
-			for (int i = 0; i < messages_len; i++) {
-				json_object *message_json;
-				message_json = json_object_array_get_idx(result_json, i);
-				json_object *update_id_json;
-				json_object_object_get_ex(message_json, "update_id", &update_id_json);
-				update_id = json_object_get_int(update_id_json);
-				printf("WORK ON %d\n", update_id);
-				json_object *message_content_json;
-				json_object_object_get_ex(message_json,
-				                          "message",
-				                          &message_content_json);
-				json_object *message_id_json;
-				json_object_object_get_ex(message_content_json,
-				                          "message_id",
-				                          &message_id_json);
+		json_object *result_json;
+		json_object_object_get_ex(*content_json, "result", &result_json);
+		int messages_len = json_object_array_length(result_json);
+		// TODO: Make arr sorted
+		int update_id = 0;
+		for (int i = 0; i < messages_len; i++) {
+			json_object *message_json;
+			message_json = json_object_array_get_idx(result_json, i);
+			json_object *update_id_json;
+			json_object_object_get_ex(message_json, "update_id", &update_id_json);
+			update_id = json_object_get_int(update_id_json);
+			printf("WORK ON %d\n", update_id);
+			json_object *message_content_json;
+			json_object_object_get_ex(message_json,
+			                          "message",
+			                          &message_content_json);
+			json_object *message_id_json;
+			json_object_object_get_ex(message_content_json,
+			                          "message_id",
+			                          &message_id_json);
 
-				tg_message_t *cur_msg = tg_message_init();
+			tg_message_t *cur_msg = tg_message_init();
 
-				cur_msg->message_id = json_object_get_int(message_id_json);
-				printf("message id is %d\n", cur_msg->message_id);
+			cur_msg->message_id = json_object_get_int(message_id_json);
+			printf("message id is %d\n", cur_msg->message_id);
 
-				json_object *chat_json;
-				json_object_object_get_ex(message_content_json, "chat", &chat_json);
-				json_object *chat_id_json;
-				json_object_object_get_ex(chat_json, "id", &chat_id_json);
-				cur_msg->chat_id = json_object_get_int(chat_id_json);
-				printf("chat id is %d\n", cur_msg->chat_id);
+			json_object *chat_json;
+			json_object_object_get_ex(message_content_json, "chat", &chat_json);
+			json_object *chat_id_json;
+			json_object_object_get_ex(chat_json, "id", &chat_id_json);
+			cur_msg->chat_id = json_object_get_int(chat_id_json);
+			printf("chat id is %d\n", cur_msg->chat_id);
 
-				json_object *text_json;
-				json_object_object_get_ex(message_content_json, "text", &text_json);
-				strcpy(cur_msg->text, json_object_get_string(text_json));
-				printf("text is %s\n", cur_msg->text);
+			json_object *text_json;
+			json_object_object_get_ex(message_content_json, "text", &text_json);
+			strcpy(cur_msg->text, json_object_get_string(text_json));
+			printf("text is %s\n", cur_msg->text);
 
-				tg_queue_put(cur_msg);
-			}
-			tg_drop_messages(update_id);
-
-			pthread_mutex_unlock(&tg_content_mutex);
-			sleep(TG_INTERVAL);
+			tg_queue_put(cur_msg);
 		}
+		tg_drop_messages(update_id);
+
+		usleep(TG_INTERVAL);
 	}
 }
 
 int tg_queue_pop(tg_message_t **task)
 {
+	while (1)
+		if (pthread_mutex_lock(&tg_content_mutex) == 0)
+			if (tasks_queue_i) {
+				pthread_mutex_unlock(&tg_content_mutex);
+				return tg_queue_try_pop(task);
+			} else {
+				pthread_mutex_unlock(&tg_content_mutex);
+				usleep(TG_INTERVAL);
+			}
+}
+
+int tg_queue_try_pop(tg_message_t **task)
+{
 	if (tasks_queue_i == 0) return 1;
-	*task = (tg_message_t *)malloc(sizeof(tg_message_t));
-	**task = tasks_queue[0];
-	if (tasks_queue_i-- == 1) {
+	if (pthread_mutex_lock(&tg_content_mutex) == 0)
+	{
+		*task = (tg_message_t *)malloc(sizeof(tg_message_t));
+		**task = tasks_queue[0];
+		if (tasks_queue_i-- == 1) {
+			free(tasks_queue);
+			pthread_mutex_unlock(&tg_content_mutex);
+			return 0;
+		}
+		tg_message_t *tasks_queue_tmp;
+		tasks_queue_tmp = (tg_message_t *)
+		                  malloc(tasks_queue_i * sizeof(tg_message_t));
+		for (int i = 0; i < tasks_queue_i; i++) {
+			tasks_queue_tmp[i] = tasks_queue[i + 1];
+		}
 		free(tasks_queue);
+		tasks_queue = tasks_queue_tmp;
+		pthread_mutex_unlock(&tg_content_mutex);
 		return 0;
 	}
-	tg_message_t *tasks_queue_tmp;
-	tasks_queue_tmp = (tg_message_t *)
-	                  malloc(tasks_queue_i * sizeof(tg_message_t));
-	for (int i = 0; i < tasks_queue_i; i++) {
-		tasks_queue_tmp[i] = tasks_queue[i + 1];
-	}
-	free(tasks_queue);
-	tasks_queue = tasks_queue_tmp;
-	return 0;
+	return 1;
 }
 
 int tg_queue_put(tg_message_t *task)
 {
-	tasks_queue = (tg_message_t *)realloc(tasks_queue,
+	if (pthread_mutex_lock(&tg_content_mutex) == 0)
+	{
+		tasks_queue = (tg_message_t *)realloc(tasks_queue,
 		                                    ++tasks_queue_i * sizeof(tg_message_t));
-	tasks_queue[tasks_queue_i - 1] = *task;
-	return tasks_queue[tasks_queue_i - 1].message_id ? 0 : 1;
+		tasks_queue[tasks_queue_i - 1] = *task;
+		pthread_mutex_unlock(&tg_content_mutex);
+		return tasks_queue[tasks_queue_i - 1].chat_id ? 0 : 1;
+	}
+	return 1;
 }
 
 int tg_queue_init()

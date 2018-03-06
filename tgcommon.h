@@ -13,7 +13,7 @@
 #define TG_METHOD_SND_TEXT "text="
 #define BUFF_SIZE 256 * 1000
 #define LINK_SIZE 1536
-#define TG_INTERVAL 1
+#define TG_INTERVAL 1000
 #define TG_MAX_MSG_LENGTH 1024
 
 #define SUCCESS 0
@@ -30,6 +30,7 @@ typedef struct tg_message_struct {
 int tg_start(json_object **content_json);
 void *tg_circle_handler(void *args);
 int tg_send_message(tg_message_t *msg);
+int tg_queue_try_pop(tg_message_t **task);
 int tg_queue_pop(tg_message_t **task);
 int tg_queue_put(tg_message_t *task);
 int tg_queue_init();
