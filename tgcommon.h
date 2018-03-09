@@ -15,10 +15,16 @@
 #define LINK_SIZE 1536
 #define TG_INTERVAL 1000
 #define TG_MAX_MSG_LENGTH 1024
+#define TG_MSG_REGULAR 1
+#define TG_MSG_COMMAND 2
 
 #define SUCCESS 0
 #define ERR_CONTENT_ISNTOK 10
 #define ERR_ANSWR 20
+#define ERR_CLBK_GET 30
+#define ERR_CLBK_REMOVE 40
+#define ERR_CLBK_REMOVE_THEREISNT 41
+
 
 typedef struct tg_message_struct {
 	char type;
@@ -27,6 +33,17 @@ typedef struct tg_message_struct {
 	char text[TG_MAX_MSG_LENGTH];
 } tg_message_t;
 
+typedef struct tg_callback_struct {
+	char command[TG_MAX_MSG_LENGTH];
+	int (*func)(tg_message_t *);
+} tg_callback_t;
+
+int tg_callback_proto(tg_message_t *msg);
+int tg_try_callback(tg_message_t *msg);
+int tg_callback_remove(char *command);
+int tg_callback_bind(char *command, int (*callback_func)());
+int tg_callback_get(char *command, tg_callback_t **callback);
+int tg_callbacks_init();
 int tg_start(json_object **content_json);
 void *tg_circle_handler(void *args);
 int tg_send_message(tg_message_t *msg);

@@ -3,11 +3,14 @@
 pthread_mutex_t tg_content_mutex = PTHREAD_MUTEX_INITIALIZER;
 tg_message_t *tasks_queue;
 int tasks_queue_i;
+tg_callback_t *tg_callbacks;
+int tg_callbacks_i = 0;
 
 int tg_start(json_object **content_json) {
 	pthread_t tg_get_content_thread;
 	pthread_create(&tg_get_content_thread, NULL, tg_circle_handler, content_json);
 	pthread_detach(tg_get_content_thread);
+	tg_callbacks_init();
 	return SUCCESS;
 }
 
@@ -68,7 +71,6 @@ void *tg_circle_handler(void *arg) {
 			json_object *update_id_json;
 			json_object_object_get_ex(message_json, "update_id", &update_id_json);
 			update_id = json_object_get_int(update_id_json);
-			printf("WORK ON %d\n", update_id);
 			json_object *message_content_json;
 			json_object_object_get_ex(message_json,
 			                          "message",
@@ -81,21 +83,21 @@ void *tg_circle_handler(void *arg) {
 			tg_message_t *cur_msg = tg_message_init();
 
 			cur_msg->message_id = json_object_get_int(message_id_json);
-			printf("message id is %d\n", cur_msg->message_id);
 
 			json_object *chat_json;
 			json_object_object_get_ex(message_content_json, "chat", &chat_json);
 			json_object *chat_id_json;
 			json_object_object_get_ex(chat_json, "id", &chat_id_json);
 			cur_msg->chat_id = json_object_get_int(chat_id_json);
-			printf("chat id is %d\n", cur_msg->chat_id);
 
 			json_object *text_json;
 			json_object_object_get_ex(message_content_json, "text", &text_json);
 			strcpy(cur_msg->text, json_object_get_string(text_json));
-			printf("text is %s\n", cur_msg->text);
 
-			tg_queue_put(cur_msg);
+			cur_msg->type = cur_msg->text[0] == '/' ? TG_MSG_COMMAND : TG_MSG_REGULAR;
+
+			if (tg_try_callback(cur_msg))
+				tg_queue_put(cur_msg);
 		}
 		tg_drop_messages(update_id);
 
@@ -103,10 +105,73 @@ void *tg_circle_handler(void *arg) {
 	}
 }
 
+int tg_try_callback(tg_message_t *msg)
+{
+	tg_callback_t *clbk;
+
+	if (!tg_callback_get(msg->text, &clbk)) {
+		pthread_t tg_clbk_thread;
+		pthread_create(&tg_clbk_thread, NULL, clbk->func, msg);
+		pthread_detach(tg_clbk_thread);
+		return 0;
+	}
+	return 1;
+}
+
+int tg_callback_bind(char *command, int (*callback_func)())
+{
+	tg_callbacks = (tg_callback_t *)realloc(tg_callbacks,
+	                                    ++tg_callbacks_i * sizeof(tg_callback_t));
+	tg_callback_t callback;
+	strcpy(callback.command, command);
+	callback.func = callback_func;
+	tg_callbacks[tg_callbacks_i - 1] = callback;
+	return SUCCESS;
+}
+
+int tg_callback_remove(char *command)
+{
+	if (tg_callbacks_i) {
+		tg_callback_t *clbks_tmp;
+		clbks_tmp = (tg_callback_t *)malloc(
+			(tg_callbacks_i - 1) * sizeof(tg_callback_t));
+			int k = 0, i = 0;
+			for (; i < tg_callbacks_i; i++)
+			if (strcmp(tg_callbacks[i].command, command))
+			clbks_tmp[i] = tg_callbacks[k++];
+			if (k < i) {
+				free(tg_callbacks);
+				tg_callbacks = clbks_tmp;
+				tg_callbacks_i--;
+				return SUCCESS;
+			} else {
+				free(clbks_tmp);
+				return ERR_CLBK_REMOVE_THEREISNT;
+			}
+	}
+	return ERR_CLBK_REMOVE_THEREISNT;
+}
+
+int tg_callback_get(char *command, tg_callback_t **callback)
+{
+	for (int i = 0; i < tg_callbacks_i; i++)
+		if (!strcmp(tg_callbacks[i].command, command)){
+			*callback = &tg_callbacks[i];
+			return 0;
+		}
+	return ERR_CLBK_GET;
+}
+
+int tg_callbacks_init()
+{
+	tg_callbacks_i = 0;
+	return SUCCESS;
+}
+
 int tg_queue_pop(tg_message_t **task)
 {
 	while (1)
-		if (pthread_mutex_lock(&tg_content_mutex) == 0)
+		if (pthread_mutex_lock(&tg_content_mutex) == 0) {
 			if (tasks_queue_i) {
 				pthread_mutex_unlock(&tg_content_mutex);
 				return tg_queue_try_pop(task);
@@ -114,6 +179,7 @@ int tg_queue_pop(tg_message_t **task)
 				pthread_mutex_unlock(&tg_content_mutex);
 				usleep(TG_INTERVAL);
 			}
+		}
 }
 
 int tg_queue_try_pop(tg_message_t **task)
@@ -246,8 +312,6 @@ int tg_drop_messages(int update_id)
 
 int tg_work_on_answer(json_object **content_json, char *content_str)
 {
-	printf("result: %s\n", content_str);
-
 	*content_json = json_tokener_parse(content_str);
 
 	if (!tg_content_isOk(*content_json))
