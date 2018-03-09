@@ -107,15 +107,21 @@ void *tg_circle_handler(void *arg) {
 
 int tg_try_callback(tg_message_t *msg)
 {
-	tg_callback_t *clbk;
+	if (msg->type == TG_MSG_COMMAND) {
+		tg_callback_t *clbk;
 
-	if (!tg_callback_get(msg->text, &clbk)) {
-		pthread_t tg_clbk_thread;
-		pthread_create(&tg_clbk_thread, NULL, clbk->func, msg);
-		pthread_detach(tg_clbk_thread);
-		return 0;
+		char command[TG_MAX_MSG_LENGTH];
+		tg_get_command(msg->text, command);
+
+		if (!tg_callback_get(command, &clbk)) {
+			pthread_t tg_clbk_thread;
+			pthread_create(&tg_clbk_thread, NULL, clbk->func, msg);
+			pthread_detach(tg_clbk_thread);
+			return SUCCESS;
+		}
+		return ERR_TRY_CLBK;
 	}
-	return 1;
+	return ERR_TRY_CLBK_NOT_CMD;
 }
 
 int tg_callback_bind(char *command, int (*callback_func)())
@@ -165,6 +171,25 @@ int tg_callback_get(char *command, tg_callback_t **callback)
 int tg_callbacks_init()
 {
 	tg_callbacks_i = 0;
+	return SUCCESS;
+}
+
+int tg_get_command(char *str4ka, char *command)
+{
+	char *sprt = " ";
+	char str4ka_tmp[TG_MAX_MSG_LENGTH];
+	strcpy(str4ka_tmp, str4ka);
+	strcpy(command, &strtok(str4ka_tmp, sprt)[1]);
+	return SUCCESS;
+}
+
+int tg_get_command_arg(char *str4ka, char *args)
+{
+	char *sprt = " ";
+	char *result = strstr(str4ka, sprt);
+	if (result == NULL)
+		return 1;
+	strcpy(args, result+1);
 	return SUCCESS;
 }
 

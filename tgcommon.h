@@ -24,7 +24,8 @@
 #define ERR_CLBK_GET 30
 #define ERR_CLBK_REMOVE 40
 #define ERR_CLBK_REMOVE_THEREISNT 41
-
+#define ERR_TRY_CLBK 50
+#define ERR_TRY_CLBK_NOT_CMD 51
 
 typedef struct tg_message_struct {
 	char type;
@@ -44,6 +45,8 @@ int tg_callback_remove(char *command);
 int tg_callback_bind(char *command, int (*callback_func)());
 int tg_callback_get(char *command, tg_callback_t **callback);
 int tg_callbacks_init();
+int tg_get_command(char *str4ka, char *command);
+int tg_get_command_arg(char *str4ka, char *args);
 int tg_start(json_object **content_json);
 void *tg_circle_handler(void *args);
 int tg_send_message(tg_message_t *msg);

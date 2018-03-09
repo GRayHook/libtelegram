@@ -4,7 +4,7 @@ int main(int argc, char const *argv[]) {
 	json_object *content_json;
 
 	tg_start(&content_json);
-	tg_callback_bind((char *)"/doroy", &testiwe);
+	tg_callback_bind((char *)"doroy", &testiwe);
 	sleep(100);
 
 	return SUCCESS;
@@ -13,8 +13,10 @@ int main(int argc, char const *argv[]) {
 int testiwe(tg_message_t *msg)
 {
 	tg_message_t answer;
-	strcpy(answer.text, "Dorooooyy");
+	if (tg_get_command_arg(msg->text, answer.text))
+		strcpy(answer.text, "Dorooooyy");
 	answer.chat_id = msg->chat_id;
 	tg_send_message(&answer);
+
 	return 0;
 }
