@@ -1,3 +1,6 @@
+/*******************************************************************************
+                       Some intresting from 46 raw
+*******************************************************************************/
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -26,6 +29,7 @@
 #define ERR_CLBK_REMOVE_THEREISNT 41
 #define ERR_TRY_CLBK 50
 #define ERR_TRY_CLBK_NOT_CMD 51
+#define WARN_QUEUE_EMPTY 60
 
 typedef struct tg_message_struct {
 	char type;
@@ -39,20 +43,47 @@ typedef struct tg_callback_struct {
 	int (*func)(tg_message_t *);
 } tg_callback_t;
 
-int tg_callback_proto(tg_message_t *msg);
-int tg_try_callback(tg_message_t *msg);
-int tg_callback_remove(char *command);
-int tg_callback_bind(char *command, int (*callback_func)());
-int tg_callback_get(char *command, tg_callback_t **callback);
-int tg_callbacks_init();
+/* Start thread that will fetching messages from telegram.
+ * content_json - it will contains returned result in json. In future i plan
+ * remove it, it must be replaced by abstraction features.
+ * Return 0 if success */
+int tg_start(json_object **content_json);
+
+/* Funcs allow you to simple parsing your messages.
+ * str4ka - message text
+ * commmand - here will be result
+ * It return 0 when parsing success */
 int tg_get_command(char *str4ka, char *command);
 int tg_get_command_arg(char *str4ka, char *args);
-int tg_start(json_object **content_json);
-void *tg_circle_handler(void *args);
+
+/* Send message.
+ * msg - message struct with chat_id and text. It will be sended to chat_id
+ * Return 0 if success */
 int tg_send_message(tg_message_t *msg);
+
+/* ASsign and remove your callback for command
+ * command - command text
+ * callback_func - handler for command.
+ * Callback prototype:
+ int tg_callback_proto(tg_message_t *msg);
+ * Return 0 if success */
+int tg_callback_bind(char *command, int (*callback_func)());
+int tg_callback_remove(char *command);
+
+/* Manipulate with queue
+* tg_queue_pop difference from tg_queue_try_pop in that it waits if queue is
+ * empty. tg_queue_try_pop returns immediately. If queue is empty than
+ * tg_queue_try_pop return WARN_QUEUE_EMPTY.
+ * task - message
+ * Usually you will haven't use tg_queue_put. But... */
 int tg_queue_try_pop(tg_message_t **task);
 int tg_queue_pop(tg_message_t **task);
 int tg_queue_put(tg_message_t *task);
+
+int tg_try_callback(tg_message_t *msg);
+int tg_callback_get(char *command, tg_callback_t **callback);
+int tg_callbacks_init();
+void *tg_circle_handler(void *args);
 int tg_queue_init();
 tg_message_t *tg_message_init();
 int tg_get_content(json_object **content_json);

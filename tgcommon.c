@@ -46,6 +46,9 @@ int tg_send_message(tg_message_t *msg)
 	{
 		fprintf(stderr, "curl_easy_perform() failed: %s\n",
 		curl_easy_strerror(res));
+		curl_easy_cleanup(curl);
+		curl_global_cleanup();
+		return 1;
 	}
 
 	curl_easy_cleanup(curl);
@@ -209,7 +212,7 @@ int tg_queue_pop(tg_message_t **task)
 
 int tg_queue_try_pop(tg_message_t **task)
 {
-	if (tasks_queue_i == 0) return 1;
+	if (tasks_queue_i == 0) return WARN_QUEUE_EMPTY;
 	if (pthread_mutex_lock(&tg_content_mutex) == 0)
 	{
 		*task = (tg_message_t *)malloc(sizeof(tg_message_t));
