@@ -5,8 +5,10 @@ tg_message_t *tasks_queue;
 int tasks_queue_i;
 tg_callback_t *tg_callbacks;
 int tg_callbacks_i = 0;
+char tg_token[64];
 
-int tg_start(json_object **content_json) {
+int tg_start(json_object **content_json, char *token) {
+	strcpy(tg_token, token);
 	pthread_t tg_get_content_thread;
 	pthread_create(&tg_get_content_thread, NULL, tg_circle_handler, content_json);
 	pthread_detach(tg_get_content_thread);
@@ -28,7 +30,7 @@ int tg_send_message(tg_message_t *msg)
 	curl = curl_easy_init();
 	if(curl)
 	{
-		sprintf(TG_link, "%s%s/", TG_BASIC_LINK, TG_TOKEN);
+		sprintf(TG_link, "%s%s/", TG_BASIC_LINK, tg_token);
 		sprintf(TG_link_sendmsg, "%s%s", TG_link, TG_METHOD_SND);
 		sprintf(TG_link_sendmsg, "%s%s%s%d%s%s%s", TG_link_sendmsg,
 		        "?", TG_METHOD_SND_CHAT_ID, msg->chat_id,
@@ -272,7 +274,7 @@ int tg_get_content(json_object **content_json)
 
 	curl_global_init(CURL_GLOBAL_DEFAULT);
 
-	sprintf(TG_link, "%s%s/", TG_BASIC_LINK, TG_TOKEN);
+	sprintf(TG_link, "%s%s/", TG_BASIC_LINK, tg_token);
 	sprintf(TG_link_updates, "%s%s", TG_link, TG_METHOD_UPD);
 
 	curl = curl_easy_init();
@@ -311,7 +313,7 @@ int tg_drop_messages(int update_id)
 
 	curl_global_init(CURL_GLOBAL_DEFAULT);
 
-	sprintf(TG_link, "%s%s/", TG_BASIC_LINK, TG_TOKEN);
+	sprintf(TG_link, "%s%s/", TG_BASIC_LINK, tg_token);
 	sprintf(TG_link_updates, "%s%s%s%d", TG_link, TG_METHOD_UPD,
 	                                    "?offset=", ++update_id);
 

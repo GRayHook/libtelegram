@@ -3,7 +3,7 @@
 int main(int argc, char const *argv[]) {
 	json_object *content_json;
 
-	tg_start(&content_json);
+	tg_start(&content_json, TG_TOKEN);
 	tg_callback_bind((char *)"doroy", &testiwe);
 	sleep(100);
 

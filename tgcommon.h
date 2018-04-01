@@ -8,7 +8,6 @@
 #include <json-c/json.h>
 #include <pthread.h>
 
-#define TG_TOKEN "513932073:AAFFWtkfEFnW0WrVjVbjqR20HclSC670K7E"
 #define TG_BASIC_LINK "https://api.telegram.org/bot"
 #define TG_METHOD_UPD "getUpdates"
 #define TG_METHOD_SND "sendMessage"
@@ -46,8 +45,9 @@ typedef struct tg_callback_struct {
 /* Start thread that will fetching messages from telegram.
  * content_json - it will contains returned result in json. In future i plan
  * remove it, it must be replaced by abstraction features.
+ * token - Your telegram token.
  * Return 0 if success */
-int tg_start(json_object **content_json);
+int tg_start(json_object **content_json, char *token);
 
 /* Funcs allow you to simple parsing your messages.
  * str4ka - message text
