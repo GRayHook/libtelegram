@@ -42,6 +42,9 @@ typedef struct tg_callback_struct {
 	int (*func)(tg_message_t *);
 } tg_callback_t;
 
+/* Set proxy string, that will be gived to CURL */
+int tg_set_proxy(const char * proxy);
+
 /* Start thread that will fetching messages from telegram.
  * content_json - it will contains returned result in json. In future i plan
  * remove it, it must be replaced by abstraction features.

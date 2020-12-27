@@ -1,9 +1,9 @@
 #include "telega.h"
 
-int main(int argc, char const *argv[])
+int main(int argc, char const * argv[])
 {
-	json_object *content_json;
-
+	json_object * content_json;
+	// tg_set_proxy("socks5://A.B.C.D:443/");
 	tg_start(&content_json, TG_TOKEN);
 	tg_callback_bind((char *)"doroy", &testiwe);
 	sleep(100);
@@ -11,7 +11,7 @@ int main(int argc, char const *argv[])
 	return SUCCESS;
 }
 
-int testiwe(tg_message_t *msg)
+int testiwe(tg_message_t * msg)
 {
 	tg_message_t answer;
 	if (tg_get_command_arg(msg->text, answer.text))

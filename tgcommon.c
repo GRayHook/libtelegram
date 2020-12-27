@@ -6,6 +6,13 @@ int tasks_queue_i;
 tg_callback_t * tg_callbacks;
 int tg_callbacks_i = 0;
 char tg_token[64];
+char tg_proxy[64];
+
+int tg_set_proxy(const char * proxy)
+{
+	strcpy(tg_proxy, proxy);
+	return SUCCESS;
+}
 
 int tg_start(json_object ** content_json, char * token)
 {
@@ -38,7 +45,8 @@ int tg_send_message(tg_message_t * msg)
 		        "&", TG_METHOD_SND_TEXT, curl_easy_escape(curl, msg->text, 0));
 
 		curl_easy_setopt(curl, CURLOPT_URL, TG_link_sendmsg);
-		curl_easy_setopt(curl, CURLOPT_PROXY, "socks5://128.140.175.97:443/");
+		if (*tg_proxy)
+			curl_easy_setopt(curl, CURLOPT_PROXY, tg_proxy);
 		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, tg_curl_write);
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &content_str);
 	}
@@ -299,7 +307,8 @@ int tg_get_content(json_object ** content_json)
 	if(curl)
 	{
 		curl_easy_setopt(curl, CURLOPT_URL, TG_link_updates);
-		curl_easy_setopt(curl, CURLOPT_PROXY, "socks5://128.140.175.97:443/");
+		if (*tg_proxy)
+			curl_easy_setopt(curl, CURLOPT_PROXY, tg_proxy);
 		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, tg_curl_write);
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &content_str);
 	}
@@ -340,7 +349,8 @@ int tg_drop_messages(int update_id)
 	if(curl)
 	{
 		curl_easy_setopt(curl, CURLOPT_URL, TG_link_updates);
-		curl_easy_setopt(curl, CURLOPT_PROXY, "socks5://128.140.175.97:443/");
+		if (*tg_proxy)
+			curl_easy_setopt(curl, CURLOPT_PROXY, tg_proxy);
 		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, tg_curl_write);
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &content_str);
 	}
