@@ -90,9 +90,12 @@ void * tg_circle_handler(void * arg)
 			json_object_object_get_ex(message_json, "update_id", &update_id_json);
 			update_id = json_object_get_int(update_id_json);
 			json_object * message_content_json;
-			json_object_object_get_ex(message_json,
-			                          "message",
-			                          &message_content_json);
+			if (!json_object_object_get_ex(message_json,
+			                               "message",
+			                               &message_content_json))
+			{
+				continue;
+			}
 			json_object * message_id_json;
 			json_object_object_get_ex(message_content_json,
 			                          "message_id",
