@@ -30,8 +30,8 @@ int tg_send_message(tg_message_t * msg)
 	CURL * curl;
 	char content_str[BUFF_SIZE];
 
-	char TG_link[LINK_SIZE];
-	char TG_link_sendmsg[LINK_SIZE];
+	char * TG_link = malloc(LINK_SIZE);
+	char * TG_link_sendmsg = malloc(LINK_SIZE);
 
 	curl_global_init(CURL_GLOBAL_DEFAULT);
 
@@ -60,12 +60,16 @@ int tg_send_message(tg_message_t * msg)
 		curl_easy_strerror(res));
 		curl_easy_cleanup(curl);
 		curl_global_cleanup();
+		free(TG_link);
+		free(TG_link_sendmsg);
 		return 1;
 	}
 
 	curl_easy_cleanup(curl);
 	curl_global_cleanup();
 
+	free(TG_link);
+	free(TG_link_sendmsg);
 	return 0;
 }
 
@@ -113,7 +117,8 @@ void * tg_circle_handler(void * arg)
 
 			json_object * text_json;
 			json_object_object_get_ex(message_content_json, "text", &text_json);
-			strcpy(cur_msg->text, json_object_get_string(text_json));
+			if (text_json)
+				strncpy(cur_msg->text, json_object_get_string(text_json), TG_MAX_MSG_LENGTH);
 
 			cur_msg->type = cur_msg->text[0] == '/' ? TG_MSG_COMMAND : TG_MSG_REGULAR;
 
@@ -298,8 +303,8 @@ int tg_get_content(json_object ** content_json)
 	CURL * curl;
 	char content_str[BUFF_SIZE];
 
-	char TG_link[LINK_SIZE];
-	char TG_link_updates[LINK_SIZE];
+	char * TG_link = malloc(LINK_SIZE);
+	char * TG_link_updates = malloc(LINK_SIZE);
 
 	curl_global_init(CURL_GLOBAL_DEFAULT);
 
@@ -331,6 +336,8 @@ int tg_get_content(json_object ** content_json)
 	curl_easy_cleanup(curl);
 	curl_global_cleanup();
 
+	free(TG_link);
+	free(TG_link_updates);
 	return 0;
 }
 
@@ -339,8 +346,8 @@ int tg_drop_messages(int update_id)
 	CURL * curl;
 	char content_str[BUFF_SIZE];
 
-	char TG_link[LINK_SIZE];
-	char TG_link_updates[LINK_SIZE];
+	char * TG_link = malloc(LINK_SIZE);
+	char * TG_link_updates = malloc(LINK_SIZE);
 
 	curl_global_init(CURL_GLOBAL_DEFAULT);
 
@@ -370,6 +377,8 @@ int tg_drop_messages(int update_id)
 	curl_easy_cleanup(curl);
 	curl_global_cleanup();
 
+	free(TG_link);
+	free(TG_link_updates);
 	return 0;
 }
 

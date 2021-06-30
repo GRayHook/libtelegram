@@ -12,9 +12,9 @@
 #define TG_METHOD_UPD "getUpdates"
 #define TG_METHOD_SND "sendMessage"
 #define TG_METHOD_SND_CHAT_ID "chat_id="
-#define TG_METHOD_SND_TEXT "text="
+#define TG_METHOD_SND_TEXT "parse_mode=HTML&text="
 #define BUFF_SIZE 256 * 1000
-#define LINK_SIZE 1536
+#define LINK_SIZE 8096
 #define TG_INTERVAL 1000
 #define TG_MAX_MSG_LENGTH 1024
 #define TG_MSG_REGULAR 1
