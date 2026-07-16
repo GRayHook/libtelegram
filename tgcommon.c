@@ -39,8 +39,7 @@ int tg_send_message(tg_message_t * msg)
 	if(curl)
 	{
 		sprintf(TG_link, "%s%s/", TG_BASIC_LINK, tg_token);
-		sprintf(TG_link_sendmsg, "%s%s", TG_link, TG_METHOD_SND);
-		sprintf(TG_link_sendmsg, "%s%s%s%d%s%s%s", TG_link_sendmsg,
+		sprintf(TG_link_sendmsg, "%s%s%s%s%d%s%s%s", TG_link, TG_METHOD_SND,
 		        "?", TG_METHOD_SND_CHAT_ID, msg->chat_id,
 		        "&", TG_METHOD_SND_TEXT, curl_easy_escape(curl, msg->text, 0));
 
@@ -142,14 +141,26 @@ int tg_try_callback(tg_message_t * msg)
 
 		if (!tg_callback_get(command, &clbk))
 		{
+			tg_clbk_thread_arg_t * targ =
+				(tg_clbk_thread_arg_t *)malloc(sizeof(tg_clbk_thread_arg_t));
+			targ->func = clbk->func;
+			targ->msg = msg;
 			pthread_t tg_clbk_thread;
-			pthread_create(&tg_clbk_thread, NULL, clbk->func, msg);
+			pthread_create(&tg_clbk_thread, NULL, tg_clbk_thread_wrapper, targ);
 			pthread_detach(tg_clbk_thread);
 			return SUCCESS;
 		}
 		return ERR_TRY_CLBK;
 	}
 	return ERR_TRY_CLBK_NOT_CMD;
+}
+
+void * tg_clbk_thread_wrapper(void * arg)
+{
+	tg_clbk_thread_arg_t * targ = (tg_clbk_thread_arg_t *)arg;
+	targ->func(targ->msg);
+	free(targ);
+	return NULL;
 }
 
 int tg_callback_bind(char * command, int (*callback_func)())
@@ -398,7 +409,7 @@ int tg_content_isOk(json_object * content_json)
 
 	if (json_object_get_type(content_ok) == json_type_boolean)
 	{
-		if (TRUE == json_object_get_boolean(content_ok))
+		if (json_object_get_boolean(content_ok))
 			return SUCCESS;
 	}
 	return ERR_CONTENT_ISNTOK;

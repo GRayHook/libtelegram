@@ -42,6 +42,11 @@ typedef struct tg_callback_struct {
 	int (*func)(tg_message_t *);
 } tg_callback_t;
 
+typedef struct tg_clbk_thread_arg_struct {
+	int (*func)(tg_message_t *);
+	tg_message_t * msg;
+} tg_clbk_thread_arg_t;
+
 /* Set proxy string, that will be gived to CURL */
 int tg_set_proxy(const char * proxy);
 
@@ -87,6 +92,7 @@ int tg_try_callback(tg_message_t *msg);
 int tg_callback_get(char *command, tg_callback_t **callback);
 int tg_callbacks_init();
 void *tg_circle_handler(void *args);
+void *tg_clbk_thread_wrapper(void *arg);
 int tg_queue_init();
 tg_message_t *tg_message_init();
 int tg_get_content(json_object **content_json);
