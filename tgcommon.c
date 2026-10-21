@@ -369,14 +369,18 @@ int tg_get_content(json_object ** content_json)
 	sprintf(TG_link_updates, "%s%s", TG_link, TG_METHOD_UPD);
 
 	curl = curl_easy_init();
-	if(curl)
+	if (!curl)
 	{
-		curl_easy_setopt(curl, CURLOPT_URL, TG_link_updates);
-		if (*tg_proxy)
-			curl_easy_setopt(curl, CURLOPT_PROXY, tg_proxy);
-		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, tg_curl_write);
-		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &content_str);
+		free(TG_link);
+		free(TG_link_updates);
+		return 1;
 	}
+
+	curl_easy_setopt(curl, CURLOPT_URL, TG_link_updates);
+	if (*tg_proxy)
+		curl_easy_setopt(curl, CURLOPT_PROXY, tg_proxy);
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, tg_curl_write);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &content_str);
 
 	CURLcode res;
 
