@@ -2,6 +2,8 @@
                        Some intresting from 46 raw
 *******************************************************************************/
 #include <stdlib.h>
+#include <stdint.h>
+#include <inttypes.h>
 #include <string.h>
 #include <unistd.h>
 #include <curl/curl.h>
@@ -40,7 +42,7 @@ typedef struct tg_write_buf_struct {
 typedef struct tg_message_struct {
 	char type;
 	int message_id;
-	unsigned int chat_id;
+	int64_t chat_id; // telegram ids are signed 64-bit (groups: -100...)
 	char text[TG_MAX_MSG_LENGTH];
 } tg_message_t;
 

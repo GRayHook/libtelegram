@@ -65,7 +65,7 @@ int tg_send_message(tg_message_t * msg)
 	}
 
 	snprintf(TG_link, link_len, "%s%s/", TG_BASIC_LINK, tg_token);
-	snprintf(TG_link_sendmsg, sendmsg_len, "%s%s%s%s%d%s%s%s", TG_link, TG_METHOD_SND,
+	snprintf(TG_link_sendmsg, sendmsg_len, "%s%s%s%s%" PRId64 "%s%s%s", TG_link, TG_METHOD_SND,
 	         "?", TG_METHOD_SND_CHAT_ID, msg->chat_id,
 	         "&", TG_METHOD_SND_TEXT, escaped);
 	curl_free(escaped);
@@ -148,7 +148,7 @@ void * tg_circle_handler(void * arg)
 				free(cur_msg);
 				continue;
 			}
-			cur_msg->chat_id = json_object_get_int(chat_id_json);
+			cur_msg->chat_id = json_object_get_int64(chat_id_json);
 
 			json_object * text_json;
 			json_object_object_get_ex(message_content_json, "text", &text_json);
