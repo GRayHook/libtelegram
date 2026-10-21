@@ -20,7 +20,7 @@ int tg_start(json_object ** content_json, char * token)
 	 * Per-request curl_global_init()/cleanup() from several threads is
 	 * not thread-safe and cleanup() races with in-flight transfers. */
 	curl_global_init(CURL_GLOBAL_DEFAULT);
-	strcpy(tg_token, token);
+	snprintf(tg_token, sizeof(tg_token), "%s", token);
 	pthread_t tg_get_content_thread;
 	pthread_create(&tg_get_content_thread, NULL, tg_circle_handler, content_json);
 	pthread_detach(tg_get_content_thread);
@@ -147,7 +147,8 @@ void * tg_circle_handler(void * arg)
 			json_object * text_json;
 			json_object_object_get_ex(message_content_json, "text", &text_json);
 			if (text_json)
-				strncpy(cur_msg->text, json_object_get_string(text_json), TG_MAX_MSG_LENGTH);
+				strncpy(cur_msg->text, json_object_get_string(text_json),
+				        TG_MAX_MSG_LENGTH - 1); // leave the NUL from memset
 
 			cur_msg->type = cur_msg->text[0] == '/' ? TG_MSG_COMMAND : TG_MSG_REGULAR;
 
@@ -257,13 +258,13 @@ int tg_get_command(char * str4ka, char * command)
 	return SUCCESS;
 }
 
-int tg_get_command_arg(char * str4ka, char * args)
+int tg_get_command_arg(char * str4ka, char * args, size_t args_size)
 {
 	char * sprt = " ";
 	char * result = strstr(str4ka, sprt);
 	if (result == NULL)
 		return 1;
-	strcpy(args, result+1);
+	snprintf(args, args_size, "%s", result+1);
 	return SUCCESS;
 }
 

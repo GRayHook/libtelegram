@@ -66,9 +66,10 @@ int tg_start(json_object **content_json, char *token);
 /* Funcs allow you to simple parsing your messages.
  * str4ka - message text
  * commmand - here will be result
+ * args/args_size - destination buffer and its size, arg is truncated to fit
  * It return 0 when parsing success */
 int tg_get_command(char *str4ka, char *command);
-int tg_get_command_arg(char *str4ka, char *args);
+int tg_get_command_arg(char *str4ka, char *args, size_t args_size);
 
 /* Send message.
  * msg - message struct with chat_id and text. It will be sended to chat_id
