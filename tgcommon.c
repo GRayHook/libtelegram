@@ -153,7 +153,10 @@ void * tg_circle_handler(void * arg)
 			cur_msg->type = cur_msg->text[0] == '/' ? TG_MSG_COMMAND : TG_MSG_REGULAR;
 
 			if (tg_try_callback(cur_msg))
-				tg_queue_put(cur_msg);
+			{
+				tg_queue_put(cur_msg); // stores a copy
+				free(cur_msg);
+			}
 		}
 		tg_drop_messages(update_id);
 
@@ -189,7 +192,8 @@ int tg_try_callback(tg_message_t * msg)
 void * tg_clbk_thread_wrapper(void * arg)
 {
 	tg_clbk_thread_arg_t * targ = (tg_clbk_thread_arg_t *)arg;
-	targ->func(targ->msg);
+	targ->func(targ->msg); // no callback keeps the pointer
+	free(targ->msg);
 	free(targ);
 	return NULL;
 }
