@@ -101,6 +101,11 @@ void * tg_circle_handler(void * arg)
 	while (1)
 	{
 		tg_get_content(content_json);
+		if (!*content_json) // nothing parseable fetched this cycle
+		{
+			usleep(TG_INTERVAL);
+			continue;
+		}
 
 		json_object * result_json = NULL;
 		if (!json_object_object_get_ex(*content_json, "result", &result_json) || !result_json)
@@ -364,6 +369,12 @@ int tg_get_content(json_object ** content_json)
 
 	char * TG_link = malloc(LINK_SIZE);
 	char * TG_link_updates = malloc(LINK_SIZE);
+	if (!TG_link || !TG_link_updates)
+	{
+		free(TG_link);
+		free(TG_link_updates);
+		return 1;
+	}
 
 	sprintf(TG_link, "%s%s/", TG_BASIC_LINK, tg_token);
 	sprintf(TG_link_updates, "%s%s", TG_link, TG_METHOD_UPD);
@@ -409,20 +420,30 @@ int tg_drop_messages(int update_id)
 
 	char * TG_link = malloc(LINK_SIZE);
 	char * TG_link_updates = malloc(LINK_SIZE);
+	if (!TG_link || !TG_link_updates)
+	{
+		free(TG_link);
+		free(TG_link_updates);
+		return 1;
+	}
 
 	sprintf(TG_link, "%s%s/", TG_BASIC_LINK, tg_token);
 	sprintf(TG_link_updates, "%s%s%s%d", TG_link, TG_METHOD_UPD,
 	                                    "?offset=", ++update_id);
 
 	curl = curl_easy_init();
-	if(curl)
+	if (!curl)
 	{
-		curl_easy_setopt(curl, CURLOPT_URL, TG_link_updates);
-		if (*tg_proxy)
-			curl_easy_setopt(curl, CURLOPT_PROXY, tg_proxy);
-		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, tg_curl_write);
-		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &content_str);
+		free(TG_link);
+		free(TG_link_updates);
+		return 1;
 	}
+
+	curl_easy_setopt(curl, CURLOPT_URL, TG_link_updates);
+	if (*tg_proxy)
+		curl_easy_setopt(curl, CURLOPT_PROXY, tg_proxy);
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, tg_curl_write);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &content_str);
 
 	CURLcode res;
 
@@ -456,8 +477,10 @@ int tg_work_on_answer(json_object ** content_json, char * content_str)
 
 int tg_content_isOk(json_object * content_json)
 {
-	json_object * content_ok;
-	json_object_object_get_ex(content_json, "ok", &content_ok);
+	if (!content_json) return ERR_CONTENT_ISNTOK;
+	json_object * content_ok = NULL;
+	if (!json_object_object_get_ex(content_json, "ok", &content_ok) || !content_ok)
+		return ERR_CONTENT_ISNTOK;
 
 	if (json_object_get_type(content_ok) == json_type_boolean)
 	{
