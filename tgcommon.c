@@ -16,6 +16,10 @@ int tg_set_proxy(const char * proxy)
 
 int tg_start(json_object ** content_json, char * token)
 {
+	/* Global init must happen once, before any thread uses curl.
+	 * Per-request curl_global_init()/cleanup() from several threads is
+	 * not thread-safe and cleanup() races with in-flight transfers. */
+	curl_global_init(CURL_GLOBAL_DEFAULT);
 	strcpy(tg_token, token);
 	pthread_t tg_get_content_thread;
 	pthread_create(&tg_get_content_thread, NULL, tg_circle_handler, content_json);
@@ -28,44 +32,61 @@ int tg_send_message(tg_message_t * msg)
 {
 	if (msg->chat_id <= 0) return -1;
 	CURL * curl;
-	char content_str[BUFF_SIZE];
-
-	char * TG_link = malloc(LINK_SIZE);
-	char * TG_link_sendmsg = malloc(LINK_SIZE);
-
-	curl_global_init(CURL_GLOBAL_DEFAULT);
+	tg_write_buf_t content_str;
+	content_str.used = 0;
 
 	curl = curl_easy_init();
-	if(curl)
-	{
-		sprintf(TG_link, "%s%s/", TG_BASIC_LINK, tg_token);
-		sprintf(TG_link_sendmsg, "%s%s%s%s%d%s%s%s", TG_link, TG_METHOD_SND,
-		        "?", TG_METHOD_SND_CHAT_ID, msg->chat_id,
-		        "&", TG_METHOD_SND_TEXT, curl_easy_escape(curl, msg->text, 0));
+	if (!curl) return -1;
 
-		curl_easy_setopt(curl, CURLOPT_URL, TG_link_sendmsg);
-		if (*tg_proxy)
-			curl_easy_setopt(curl, CURLOPT_PROXY, tg_proxy);
-		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, tg_curl_write);
-		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &content_str);
+	char * escaped = curl_easy_escape(curl, msg->text, 0);
+	if (!escaped)
+	{
+		curl_easy_cleanup(curl);
+		return -1;
 	}
 
-	CURLcode res;
+	/* Size the buffers to the actual URL, a long message must not overflow
+	 * a fixed-size buffer. */
+	size_t link_len = strlen(TG_BASIC_LINK) + strlen(tg_token) + 2;
+	size_t sendmsg_len = link_len + strlen(TG_METHOD_SND)
+	                     + strlen(TG_METHOD_SND_CHAT_ID) + strlen(TG_METHOD_SND_TEXT)
+	                     + strlen(escaped) + 16;
 
-	res = curl_easy_perform(curl);
+	char * TG_link = malloc(link_len);
+	char * TG_link_sendmsg = malloc(sendmsg_len);
+	if (!TG_link || !TG_link_sendmsg)
+	{
+		curl_free(escaped);
+		free(TG_link);
+		free(TG_link_sendmsg);
+		curl_easy_cleanup(curl);
+		return -1;
+	}
+
+	snprintf(TG_link, link_len, "%s%s/", TG_BASIC_LINK, tg_token);
+	snprintf(TG_link_sendmsg, sendmsg_len, "%s%s%s%s%d%s%s%s", TG_link, TG_METHOD_SND,
+	         "?", TG_METHOD_SND_CHAT_ID, msg->chat_id,
+	         "&", TG_METHOD_SND_TEXT, escaped);
+	curl_free(escaped);
+
+	curl_easy_setopt(curl, CURLOPT_URL, TG_link_sendmsg);
+	if (*tg_proxy)
+		curl_easy_setopt(curl, CURLOPT_PROXY, tg_proxy);
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, tg_curl_write);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &content_str);
+
+	CURLcode res = curl_easy_perform(curl);
 	if(res != CURLE_OK)
 	{
 		fprintf(stderr, "curl_easy_perform() failed: %s\n",
 		curl_easy_strerror(res));
 		curl_easy_cleanup(curl);
-		curl_global_cleanup();
 		free(TG_link);
 		free(TG_link_sendmsg);
 		return 1;
 	}
 
 	curl_easy_cleanup(curl);
-	curl_global_cleanup();
 
 	free(TG_link);
 	free(TG_link_sendmsg);
@@ -80,9 +101,14 @@ void * tg_circle_handler(void * arg)
 	{
 		tg_get_content(content_json);
 
-		json_object * result_json;
-		json_object_object_get_ex(*content_json, "result", &result_json);
+		json_object * result_json = NULL;
+		if (!json_object_object_get_ex(*content_json, "result", &result_json) || !result_json)
+		{
+			usleep(TG_INTERVAL);
+			continue;
+		}
 		int messages_len = json_object_array_length(result_json);
+		if (messages_len < 0) messages_len = 0;
 		// TODO: Make arr sorted
 		int update_id = 0;
 		for (int i = 0; i < messages_len; i++)
@@ -109,9 +135,13 @@ void * tg_circle_handler(void * arg)
 			cur_msg->message_id = json_object_get_int(message_id_json);
 
 			json_object * chat_json;
-			json_object_object_get_ex(message_content_json, "chat", &chat_json);
 			json_object * chat_id_json;
-			json_object_object_get_ex(chat_json, "id", &chat_id_json);
+			if (!json_object_object_get_ex(message_content_json, "chat", &chat_json) ||
+			    !json_object_object_get_ex(chat_json, "id", &chat_id_json))
+			{
+				free(cur_msg);
+				continue;
+			}
 			cur_msg->chat_id = json_object_get_int(chat_id_json);
 
 			json_object * text_json;
@@ -312,12 +342,11 @@ tg_message_t * tg_message_init()
 int tg_get_content(json_object ** content_json)
 {
 	CURL * curl;
-	char content_str[BUFF_SIZE];
+	tg_write_buf_t content_str;
+	content_str.used = 0;
 
 	char * TG_link = malloc(LINK_SIZE);
 	char * TG_link_updates = malloc(LINK_SIZE);
-
-	curl_global_init(CURL_GLOBAL_DEFAULT);
 
 	sprintf(TG_link, "%s%s/", TG_BASIC_LINK, tg_token);
 	sprintf(TG_link_updates, "%s%s", TG_link, TG_METHOD_UPD);
@@ -341,11 +370,10 @@ int tg_get_content(json_object ** content_json)
 		curl_easy_strerror(res));
 	}
 	else
-		if (tg_work_on_answer(content_json, content_str))
+		if (tg_work_on_answer(content_json, content_str.buf))
 			printf("somthn wrong with content\n");
 
 	curl_easy_cleanup(curl);
-	curl_global_cleanup();
 
 	free(TG_link);
 	free(TG_link_updates);
@@ -355,12 +383,11 @@ int tg_get_content(json_object ** content_json)
 int tg_drop_messages(int update_id)
 {
 	CURL * curl;
-	char content_str[BUFF_SIZE];
+	tg_write_buf_t content_str;
+	content_str.used = 0;
 
 	char * TG_link = malloc(LINK_SIZE);
 	char * TG_link_updates = malloc(LINK_SIZE);
-
-	curl_global_init(CURL_GLOBAL_DEFAULT);
 
 	sprintf(TG_link, "%s%s/", TG_BASIC_LINK, tg_token);
 	sprintf(TG_link_updates, "%s%s%s%d", TG_link, TG_METHOD_UPD,
@@ -386,7 +413,6 @@ int tg_drop_messages(int update_id)
 	}
 
 	curl_easy_cleanup(curl);
-	curl_global_cleanup();
 
 	free(TG_link);
 	free(TG_link_updates);
@@ -395,7 +421,12 @@ int tg_drop_messages(int update_id)
 
 int tg_work_on_answer(json_object ** content_json, char * content_str)
 {
-	*content_json = json_tokener_parse(content_str);
+	json_object * parsed = json_tokener_parse(content_str);
+	if (!parsed)
+		return ERR_ANSWR;
+
+	json_object_put(*content_json);
+	*content_json = parsed;
 
 	if (!tg_content_isOk(*content_json))
 		return SUCCESS;
@@ -417,5 +448,20 @@ int tg_content_isOk(json_object * content_json)
 
 size_t tg_curl_write(void * ptr, size_t size, size_t nmemb, void * stream)
 {
-	return sprintf(stream, "%s", (char *)ptr);
+	tg_write_buf_t * buf = (tg_write_buf_t *)stream;
+	size_t len = size * nmemb;
+
+	/* Append the chunk: a response may arrive in several callbacks.
+	 * On overflow the answer stays incomplete and will be rejected
+	 * by the JSON parser instead of corrupting memory. */
+	size_t room = BUFF_SIZE - 1 - buf->used;
+	if (room > 0)
+	{
+		if (len > room) len = room;
+		memcpy(buf->buf + buf->used, ptr, len);
+		buf->used += len;
+		buf->buf[buf->used] = '\0';
+	}
+
+	return size * nmemb;
 }

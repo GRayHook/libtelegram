@@ -30,6 +30,12 @@
 #define ERR_TRY_CLBK_NOT_CMD 51
 #define WARN_QUEUE_EMPTY 60
 
+/* Accumulating buffer for curl write callback */
+typedef struct tg_write_buf_struct {
+	char buf[BUFF_SIZE];
+	size_t used;
+} tg_write_buf_t;
+
 typedef struct tg_message_struct {
 	char type;
 	int message_id;
