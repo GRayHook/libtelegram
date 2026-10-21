@@ -1,6 +1,7 @@
 #include "tgcommon.h"
 
 pthread_mutex_t tg_content_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t tg_callbacks_mutex = PTHREAD_MUTEX_INITIALIZER;
 tg_message_t * tasks_queue;
 int tasks_queue_i;
 tg_callback_t * tg_callbacks;
@@ -21,10 +22,10 @@ int tg_start(json_object ** content_json, char * token)
 	 * not thread-safe and cleanup() races with in-flight transfers. */
 	curl_global_init(CURL_GLOBAL_DEFAULT);
 	snprintf(tg_token, sizeof(tg_token), "%s", token);
+	tg_callbacks_init();
 	pthread_t tg_get_content_thread;
 	pthread_create(&tg_get_content_thread, NULL, tg_circle_handler, content_json);
 	pthread_detach(tg_get_content_thread);
-	tg_callbacks_init();
 	return SUCCESS;
 }
 
@@ -168,7 +169,7 @@ int tg_try_callback(tg_message_t * msg)
 {
 	if (msg->type == TG_MSG_COMMAND)
 	{
-		tg_callback_t * clbk;
+		tg_callback_t clbk;
 
 		char command[TG_MAX_MSG_LENGTH];
 		tg_get_command(msg->text, command);
@@ -177,7 +178,8 @@ int tg_try_callback(tg_message_t * msg)
 		{
 			tg_clbk_thread_arg_t * targ =
 				(tg_clbk_thread_arg_t *)malloc(sizeof(tg_clbk_thread_arg_t));
-			targ->func = clbk->func;
+			if (!targ) return ERR_TRY_CLBK;
+			targ->func = clbk.func;
 			targ->msg = msg;
 			pthread_t tg_clbk_thread;
 			pthread_create(&tg_clbk_thread, NULL, tg_clbk_thread_wrapper, targ);
@@ -200,12 +202,18 @@ void * tg_clbk_thread_wrapper(void * arg)
 
 int tg_callback_bind(char * command, int (*callback_func)())
 {
-	tg_callbacks = (tg_callback_t *)realloc(tg_callbacks,
-	                                    ++tg_callbacks_i * sizeof(tg_callback_t));
+	tg_callback_t * tmp = (tg_callback_t *)realloc(tg_callbacks,
+	                                    (tg_callbacks_i + 1) * sizeof(tg_callback_t));
+	if (!tmp) return ERR_CLBK_BIND;
+	tg_callbacks = tmp;
+
 	tg_callback_t callback;
-	strcpy(callback.command, command);
+	snprintf(callback.command, sizeof(callback.command), "%s", command);
 	callback.func = callback_func;
-	tg_callbacks[tg_callbacks_i - 1] = callback;
+
+	pthread_mutex_lock(&tg_callbacks_mutex);
+	tg_callbacks[tg_callbacks_i++] = callback;
+	pthread_mutex_unlock(&tg_callbacks_mutex);
 	return SUCCESS;
 }
 
@@ -236,15 +244,19 @@ int tg_callback_remove(char * command)
 	return ERR_CLBK_REMOVE_THEREISNT;
 }
 
-int tg_callback_get(char * command, tg_callback_t ** callback)
+int tg_callback_get(char * command, tg_callback_t * callback)
 {
+	int found = ERR_CLBK_GET;
+	pthread_mutex_lock(&tg_callbacks_mutex);
 	for (int i = 0; i < tg_callbacks_i; i++)
 		if (!strcmp(tg_callbacks[i].command, command))
 		{
-			*callback = &tg_callbacks[i];
-			return 0;
+			*callback = tg_callbacks[i];
+			found = SUCCESS;
+			break;
 		}
-	return ERR_CLBK_GET;
+	pthread_mutex_unlock(&tg_callbacks_mutex);
+	return found;
 }
 
 int tg_callbacks_init()

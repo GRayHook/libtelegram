@@ -24,6 +24,7 @@
 #define ERR_CONTENT_ISNTOK 10
 #define ERR_ANSWR 20
 #define ERR_CLBK_GET 30
+#define ERR_CLBK_BIND 31
 #define ERR_CLBK_REMOVE 40
 #define ERR_CLBK_REMOVE_THEREISNT 41
 #define ERR_TRY_CLBK 50
@@ -78,12 +79,13 @@ int tg_send_message(tg_message_t *msg);
 
 /* ASsign and remove your callback for command
  * command - command text
- * callback_func - handler for command.
+ * callback - place to copy the found callback into
  * Callback prototype:
  int tg_callback_proto(tg_message_t *msg);
  * Return 0 if success */
 int tg_callback_bind(char *command, int (*callback_func)());
 int tg_callback_remove(char *command);
+int tg_callback_get(char *command, tg_callback_t *callback);
 
 /* Manipulate with queue
 * tg_queue_pop difference from tg_queue_try_pop in that it waits if queue is
@@ -96,7 +98,6 @@ int tg_queue_pop(tg_message_t **task);
 int tg_queue_put(tg_message_t *task);
 
 int tg_try_callback(tg_message_t *msg);
-int tg_callback_get(char *command, tg_callback_t **callback);
 int tg_callbacks_init();
 void *tg_circle_handler(void *args);
 void *tg_clbk_thread_wrapper(void *arg);
