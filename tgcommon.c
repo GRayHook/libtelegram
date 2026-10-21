@@ -221,25 +221,25 @@ int tg_callback_remove(char * command)
 {
 	if (tg_callbacks_i)
 	{
-		tg_callback_t * clbks_tmp;
-		clbks_tmp = (tg_callback_t *)malloc(
+		tg_callback_t * clbks_tmp = (tg_callback_t *)malloc(
 			(tg_callbacks_i - 1) * sizeof(tg_callback_t));
-			int k = 0, i = 0;
-			for (; i < tg_callbacks_i; i++)
+		if (!clbks_tmp) return ERR_CLBK_REMOVE;
+		int k = 0, i = 0;
+		pthread_mutex_lock(&tg_callbacks_mutex);
+		for (; i < tg_callbacks_i; i++)
 			if (strcmp(tg_callbacks[i].command, command))
-			clbks_tmp[i] = tg_callbacks[k++];
-			if (k < i)
-			{
-				free(tg_callbacks);
-				tg_callbacks = clbks_tmp;
-				tg_callbacks_i--;
-				return SUCCESS;
-			}
-			else
-			{
-				free(clbks_tmp);
-				return ERR_CLBK_REMOVE_THEREISNT;
-			}
+				clbks_tmp[k++] = tg_callbacks[i];
+		if (k < tg_callbacks_i) // at least one entry was removed
+		{
+			free(tg_callbacks);
+			tg_callbacks = clbks_tmp;
+			tg_callbacks_i = k;
+			pthread_mutex_unlock(&tg_callbacks_mutex);
+			return SUCCESS;
+		}
+		pthread_mutex_unlock(&tg_callbacks_mutex);
+		free(clbks_tmp);
+		return ERR_CLBK_REMOVE_THEREISNT;
 	}
 	return ERR_CLBK_REMOVE_THEREISNT;
 }
